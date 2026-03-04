@@ -33,6 +33,7 @@ const hoisted = vi.hoisted(() => {
   const sessionBindingListBySessionMock = vi.fn();
   const closeSessionMock = vi.fn();
   const initializeSessionMock = vi.fn();
+  const startAcpSpawnParentStreamRelayMock = vi.fn();
   const state = {
     cfg: createDefaultSpawnConfig(),
   };
@@ -45,6 +46,7 @@ const hoisted = vi.hoisted(() => {
     sessionBindingListBySessionMock,
     closeSessionMock,
     initializeSessionMock,
+    startAcpSpawnParentStreamRelayMock,
     state,
   };
 });
@@ -99,6 +101,11 @@ vi.mock("../infra/outbound/session-binding-service.js", async (importOriginal) =
     getSessionBindingService: () => buildSessionBindingServiceMock(),
   };
 });
+
+vi.mock("./acp-spawn-parent-stream.js", () => ({
+  startAcpSpawnParentStreamRelay: (...args: unknown[]) =>
+    hoisted.startAcpSpawnParentStreamRelayMock(...args),
+}));
 
 const { spawnAcpDirect } = await import("./acp-spawn.js");
 
@@ -236,6 +243,7 @@ describe("spawnAcpDirect", () => {
     hoisted.sessionBindingResolveByConversationMock.mockReset().mockReturnValue(null);
     hoisted.sessionBindingListBySessionMock.mockReset().mockReturnValue([]);
     hoisted.sessionBindingUnbindMock.mockReset().mockResolvedValue([]);
+    hoisted.startAcpSpawnParentStreamRelayMock.mockReset();
   });
 
   it("spawns ACP session, binds a new thread, and dispatches initial task", async () => {
@@ -422,5 +430,54 @@ describe("spawnAcpDirect", () => {
     expect(result.error).toContain('sandbox="require"');
     expect(hoisted.callGatewayMock).not.toHaveBeenCalled();
     expect(hoisted.initializeSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('streams ACP progress to parent when streamTo="parent"', async () => {
+    const result = await spawnAcpDirect(
+      {
+        task: "Investigate flaky tests",
+        agentId: "codex",
+        streamTo: "parent",
+      },
+      {
+        agentSessionKey: "agent:main:main",
+        agentChannel: "discord",
+        agentAccountId: "default",
+        agentTo: "channel:parent-channel",
+      },
+    );
+
+    expect(result.status).toBe("accepted");
+    const agentCall = hoisted.callGatewayMock.mock.calls
+      .map((call: unknown[]) => call[0] as { method?: string; params?: Record<string, unknown> })
+      .find((request) => request.method === "agent");
+    expect(agentCall?.params?.deliver).toBe(false);
+    expect(hoisted.startAcpSpawnParentStreamRelayMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "run-1",
+        parentSessionKey: "agent:main:main",
+        agentId: "codex",
+      }),
+    );
+  });
+
+  it('rejects streamTo="parent" without requester session context', async () => {
+    const result = await spawnAcpDirect(
+      {
+        task: "Investigate flaky tests",
+        agentId: "codex",
+        streamTo: "parent",
+      },
+      {
+        agentChannel: "discord",
+        agentAccountId: "default",
+        agentTo: "channel:parent-channel",
+      },
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain('streamTo="parent"');
+    expect(hoisted.callGatewayMock).not.toHaveBeenCalled();
+    expect(hoisted.startAcpSpawnParentStreamRelayMock).not.toHaveBeenCalled();
   });
 });
