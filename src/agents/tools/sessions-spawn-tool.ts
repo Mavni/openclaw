@@ -120,6 +120,13 @@ export function createSessionsSpawnTool(opts?: {
           }>)
         : undefined;
 
+      if (streamTo && runtime !== "acp") {
+        return jsonResult({
+          status: "error",
+          error: `streamTo is only supported for runtime=acp; got runtime=${runtime}`,
+        });
+      }
+
       if (runtime === "acp") {
         if (Array.isArray(attachments) && attachments.length > 0) {
           return jsonResult({
