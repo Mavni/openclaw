@@ -131,6 +131,36 @@ describe("startAcpSpawnParentStreamRelay", () => {
     stop();
   });
 
+  it("auto-disposes stale relays after max lifetime timeout", () => {
+    const stop = startAcpSpawnParentStreamRelay({
+      runId: "run-3",
+      parentSessionKey: "agent:main:main",
+      childSessionKey: "agent:codex:acp:child-3",
+      agentId: "codex",
+      streamFlushMs: 1,
+      noOutputNoticeMs: 0,
+      maxRelayLifetimeMs: 1_000,
+    });
+
+    vi.advanceTimersByTime(1_001);
+    expect(collectedTexts().some((text) => text.includes("stream relay timed out after 1s"))).toBe(
+      true,
+    );
+
+    const before = enqueueSystemEventMock.mock.calls.length;
+    emitAgentEvent({
+      runId: "run-3",
+      stream: "assistant",
+      data: {
+        delta: "late output",
+      },
+    });
+    vi.advanceTimersByTime(5);
+
+    expect(enqueueSystemEventMock.mock.calls).toHaveLength(before);
+    stop();
+  });
+
   it("resolves ACP spawn stream log path from session metadata", () => {
     readAcpSessionEntryMock.mockReturnValue({
       storePath: "/tmp/openclaw/agents/codex/sessions/sessions.json",
