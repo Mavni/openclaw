@@ -334,6 +334,12 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
+  extensions/google-antigravity-auth:
+    devDependencies:
+      openclaw:
+        specifier: workspace:*
+        version: link:../..
+
   extensions/google-gemini-cli-auth: {}
 
   extensions/googlechat:
@@ -445,6 +451,12 @@ importers:
         version: 4.3.6
 
   extensions/open-prose: {}
+
+  extensions/openai-codex-auth:
+    devDependencies:
+      openclaw:
+        specifier: workspace:*
+        version: link:../..
 
   extensions/signal: {}
 
